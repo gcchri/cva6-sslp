@@ -24,6 +24,8 @@ build/
 *.out
 *.jou
 *.o
+*.un~
+*~
 uart
 work-ver/*
 corev_apu/fpga/work-fpga
