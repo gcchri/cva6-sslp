@@ -46,7 +46,12 @@ module branch_unit #(
     // Branch is resolved, new entries can be accepted by scoreboard - ID_STAGE
     output logic resolve_branch_o,
     // Branch exception out - TO_BE_COMPLETED
-    output exception_t branch_exception_o
+    output exception_t branch_exception_o,
+    //SSLP
+    output logic [1:0] complete_cfi,
+    input  logic xLPAD_i,
+    input  riscv::elp elp_i
+    //_SSLP
 );
   logic [CVA6Cfg.VLEN-1:0] target_address;
   logic [CVA6Cfg.VLEN-1:0] next_pc;
@@ -65,6 +70,9 @@ module branch_unit #(
     resolved_branch_o.valid = branch_valid_i;
     resolved_branch_o.is_mispredict = 1'b0;
     resolved_branch_o.cf_type = branch_predict_i.cf;
+    //SSLP
+    complete_cfi              = 2'b01;
+    //_SSLP
     // calculate next PC, depending on whether the instruction is compressed or not this may be different
     // TODO(zarubaf): We already calculate this a couple of times, maybe re-use?
     next_pc                          = pc_i + ((is_compressed_instr_i) ? {{CVA6Cfg.VLEN-2{1'b0}}, 2'h2} : {{CVA6Cfg.VLEN-3{1'b0}}, 3'h4});
@@ -124,6 +132,22 @@ module branch_unit #(
       if (branch_valid_i && (target_address[0] || target_address[1]) && jump_taken) begin
         branch_exception_o.valid = 1'b1;
       end
+
     end
+    //SSLP
+    if (xLPAD_i) begin
+      if (branch_valid_i && jump_taken && fu_data_i.operator == ariane_pkg::LPAD && elp_i == riscv::LP_EXPECTED) begin
+        if (branch_comp_res_i == 1'b0) begin
+            branch_exception_o.valid = 1'b1;
+            branch_exception_o.tval = 'h0002;
+            complete_cfi = 2'b00;  //mismach
+        end else
+            complete_cfi = 2'b11;
+        end
+       end else
+        complete_cfi = 2'b10;
+       end
+    end 
+    //_SSLP
   end
 endmodule

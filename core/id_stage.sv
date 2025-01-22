@@ -85,7 +85,11 @@ module id_stage #(
     input logic compressed_ready_i,
     input x_compressed_resp_t compressed_resp_i,
     output logic compressed_valid_o,
-    output x_compressed_req_t compressed_req_o
+    output x_compressed_req_t compressed_req_o,
+
+    //SSLP
+    input  logic                          xLPAD_i
+    //_SSLP
 );
   // ID/ISSUE register stage
   typedef struct packed {
@@ -261,7 +265,10 @@ module id_stage #(
         .hu_i,
         .instruction_o             (decoded_instruction[i]),
         .orig_instr_o              (orig_instr[i]),
-        .is_control_flow_instr_o   (is_control_flow_instr[i])
+        .is_control_flow_instr_o   (is_control_flow_instr[i]),
+        //SSLP
+        .xLPAD_i                   (xLPAD_i)
+        //_SSLP
     );
   end
 

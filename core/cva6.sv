@@ -622,6 +622,13 @@ module cva6
   logic dcache_commit_wbuffer_empty;
   logic dcache_commit_wbuffer_not_ni;
 
+  //SSLP
+  logic xLPAD;
+  riscv::elp elp_o, elp_csr_ex;
+  logic [1:0] complete_cfi;
+  //_SSLP
+
+
   //RVFI
   lsu_ctrl_t rvfi_lsu_ctrl;
   logic [CVA6Cfg.PLEN-1:0] rvfi_mem_paddr;
@@ -662,7 +669,12 @@ module cva6
       .icache_dreq_i      (icache_dreq_cache_if),
       .fetch_entry_o      (fetch_entry_if_id),
       .fetch_entry_valid_o(fetch_valid_if_id),
-      .fetch_entry_ready_i(fetch_ready_id_if)
+      .fetch_entry_ready_i(fetch_ready_id_if),
+      //SSLP
+      .elp_o              (elp_o),
+      .complete_cfi       (complete_cfi),
+      .xLPAD_i            (xLPAD)
+      //_SSLP
   );
 
   // ---------
@@ -716,7 +728,10 @@ module cva6
       .compressed_ready_i(x_compressed_ready),
       .compressed_resp_i (x_compressed_resp),
       .compressed_valid_o(x_compressed_valid),
-      .compressed_req_o  (x_compressed_req)
+      .compressed_req_o  (x_compressed_req),
+      //SSLP
+      .xLPAD_i           (xLPAD)
+      //_SSLP
   );
 
   logic [CVA6Cfg.NrWbPorts-1:0][CVA6Cfg.TRANS_ID_BITS-1:0] trans_id_ex_id;
@@ -1018,7 +1033,12 @@ module cva6
       .pmpaddr_i               (pmpaddr),
       //RVFI
       .rvfi_lsu_ctrl_o         (rvfi_lsu_ctrl),
-      .rvfi_mem_paddr_o        (rvfi_mem_paddr)
+      .rvfi_mem_paddr_o        (rvfi_mem_paddr),
+      //SSLP
+      .complete_cfi            (complete_cfi),
+      .xLPAD_i                 (xLPAD),
+      .elp_i                   (elp_csr_ex)
+      //_SSLP
   );
 
   // ---------
@@ -1155,7 +1175,13 @@ module cva6
       .pmpaddr_o               (pmpaddr),
       .mcountinhibit_o         (mcountinhibit_csr_perf),
       //RVFI
-      .rvfi_csr_o              (rvfi_csr)
+      .rvfi_csr_o              (rvfi_csr),
+      //SSLP
+      .elp_i                   (elp_o),
+      .elp_o                   (elp_csr_ex),
+      .complete_cfi            (complete_cfi),
+      .xLPAD_o                 (xLPAD)
+      //_SSLP
   );
 
   // ------------------------

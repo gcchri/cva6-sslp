@@ -498,7 +498,10 @@ package ariane_pkg;
     BREV8,
     // Zip instructions
     UNZIP,
-    ZIP
+    ZIP,
+    //SSLP
+    LPAD
+    //_SSLP
   } fu_op;
 
   function automatic logic op_is_branch(input fu_op op);

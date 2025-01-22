@@ -85,7 +85,10 @@ module decoder
     // Instruction - ISSUE_STAGE
     output logic [31:0] orig_instr_o,
     // Is a control flow instruction - ISSUE_STAGE
-    output logic is_control_flow_instr_o
+    output logic is_control_flow_instr_o,
+    //SSLP
+    input xLPAD_i
+    //_SSLP
 );
   logic illegal_instr;
   logic illegal_instr_bm;
@@ -1422,10 +1425,17 @@ module decoder
         riscv::OpcodeAuipc: begin
           instruction_o.fu     = ALU;
           imm_select           = UIMM;
-          instruction_o.use_pc = 1'b1;
+          //SSLP
+          if (xLPAD_i && instr.utype.rd == 5'b0) begin
+              instruction_o.op = ariane_pkg::LPAD;
+              instruction_o.rs1 = 5'b00111;
+              instruction_o.use_pc = 1'b0
+          end else begin
+            instruction_o.use_pc = 1'b1;
+          end
           instruction_o.rd     = instr.utype.rd;
         end
-
+          //_SSLP
         riscv::OpcodeLui: begin
           imm_select       = UIMM;
           instruction_o.fu = ALU;
