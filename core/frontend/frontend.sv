@@ -63,7 +63,13 @@ module frontend
     // Handshake's valid between fetch and decode - ID_STAGE
     output logic [CVA6Cfg.NrIssuePorts-1:0] fetch_entry_valid_o,
     // Handshake's ready between fetch and decode - ID_STAGE
-    input logic [CVA6Cfg.NrIssuePorts-1:0] fetch_entry_ready_i
+    input logic [CVA6Cfg.NrIssuePorts-1:0] fetch_entry_ready_i,
+    
+    //SSLP
+    output riscv::elp elp_o,
+    input logic [1:0] complete_cfi,
+    input logic xLPAD_i
+    //_SSLP
 );
 
   localparam type bht_update_t = struct packed {
@@ -111,6 +117,10 @@ module frontend
   logic                                       replay;
   logic [                   CVA6Cfg.VLEN-1:0] replay_addr;
 
+  //SSLP
+  riscv::elp t_elp_o;
+  //_SSLP
+  
   // shift amount
   logic [$clog2(CVA6Cfg.INSTR_PER_FETCH)-1:0] shamt;
   // address will always be 16 bit aligned, make this explicit here
@@ -572,9 +582,19 @@ module frontend
       .replay_addr_o      (replay_addr),
       .fetch_entry_o      (fetch_entry_o),         // to back-end
       .fetch_entry_valid_o(fetch_entry_valid_o),   // to back-end
-      .fetch_entry_ready_i(fetch_entry_ready_i)    // to back-end
+      .fetch_entry_ready_i(fetch_entry_ready_i),    // to back-end
+      //SSLP
+      .move               (move),
+      .elp_o              (elp_o),
+      .complete_cfi       (complete_cfi),
+      .xLPAD_i            (xLPAD_i),
+      .ex_valid_i         (ex_valid_i)
+      //_SSLP
   );
-
+  //SSLP
+  logic move;
+  assign move = resolved_branch_i.valid; 
+  //_SSLP
   // pragma translate_off
 `ifndef VERILATOR
   initial begin

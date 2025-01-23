@@ -167,7 +167,13 @@ module csr_regfile
     // TO_BE_COMPLETED - PERF_COUNTERS
     output logic [31:0] mcountinhibit_o,
     // RVFI
-    output rvfi_probes_csr_t rvfi_csr_o
+    output rvfi_probes_csr_t rvfi_csr_o,
+    //SSLP
+    input riscv::elp elp_i,
+    input logic [1:0] complete_cfi,
+    output riscv_elp elp_o,
+    output logic xLPAD_o
+    //_SSLP
 );
 
   localparam logic [63:0] SMODE_STATUS_READ_MASK = ariane_pkg::smode_status_read_mask(CVA6Cfg);
@@ -293,6 +299,23 @@ module csr_regfile
 
   assign pmpcfg_o  = pmpcfg_q[(CVA6Cfg.NrPMPEntries>0?CVA6Cfg.NrPMPEntries-1 : 0):0];
   assign pmpaddr_o = pmpaddr_q[(CVA6Cfg.NrPMPEntries>0?CVA6Cfg.NrPMPEntries-1 : 0):0];
+  
+  //SSLP
+  logic xLPAD;
+  riscv::elp lp_exp_d, lp_exp_q;
+  assign xLPAD_o = xLPAD;
+  riscv::env_cfg menvcfg_d, menvcfg_q;
+  riscv::env_cfg menvcfgh_d, menvcfgh_q;
+  riscv::env_cfg henvcfg_d, henvcfg_q;
+  riscv::env_cfg henvcfgh_d, henvcfgh_q;
+  riscv::env_cfg senvcfg_d, senvcfg_q;
+  riscv::msec_cfg mseccfg_d, mseccfg_q;
+  // ----------------
+  // Assignments
+  // ----------------
+  assign elp_o = lp_exp_q;
+  //_SSLP
+
 
   riscv::fcsr_t fcsr_q, fcsr_d;
   // ----------------
@@ -329,6 +352,14 @@ module csr_regfile
 
     if (csr_read) begin
       unique case (conv_csr_addr.address)
+        //SSLP
+        riscv::CSR_MENVCFG: csr_rdata = menvcfg_q;//??
+        riscv::CSR_MENVCFGH: csr_rdata = menvcfgh_q;
+        riscv::CSR_MSECCFG: csr_rdata = mseccfg_q;
+        riscv::CSR_HENVCFG: csr_rdata = henvcfg_q;
+        riscv::CSR_HENVCFGH: csr_rdata = henvcfgh_q;
+        riscv::CSR_SENVCFG: csr_rdata = senvcfg_q;
+        //_SSLP
         riscv::CSR_FFLAGS: begin
           if (CVA6Cfg.FpPresent && !(mstatus_q.fs == riscv::Off || (CVA6Cfg.RVH && v_q && vsstatus_q.fs == riscv::Off))) begin
             csr_rdata = {{CVA6Cfg.XLEN - 5{1'b0}}, fcsr_q.fflags};
@@ -992,10 +1023,41 @@ module csr_regfile
 
     pmpcfg_d               = pmpcfg_q;
     pmpaddr_d              = pmpaddr_q;
+    
+    //SSLP
+    lp_exp_d                = lp_exp_q;
+    menvcfg_d               = menvcfg_q;
+    menvcfgh_d              = menvcfgh_q;
+    mseccfg_d               = mseccfg_q;
+    senvcfg_d               = menvcfg_q;
+    henvcfg_d               = henvcfg_q;
+    henvcfgh_d              = henvcfgh_q;
+    //_SSLP
 
     // check for correct access rights and that we are writing
     if (csr_we) begin
       unique case (conv_csr_addr.address)
+
+
+        //SSLP
+        riscv::CSR_MSECCFG: mseccfg_d = csr_wdata;
+        riscv::CSR_MENVCFG: begin
+            menvcfg_d = csr_wdata;
+        end
+        riscv::CSR_MENVCFGH: begin
+            menvcfgh_d = csr_wdata;
+        end
+        riscv::CSR_HENVCFGH: begin
+            henvcfgh_d = csr_wdata;
+        end
+        riscv::CSR_HENVCFG: begin
+            henvcfg_d = csr_wdata;
+        end
+        riscv::CSR_SENVCFG: begin
+            senvcfg_d = csr_wdata;
+        end
+        //_SSLP
+
         // Floating-Point
         riscv::CSR_FFLAGS: begin
           if (CVA6Cfg.FpPresent && !(mstatus_q.fs == riscv::Off || (CVA6Cfg.RVH && v_q && vsstatus_q.fs == riscv::Off))) begin
@@ -1716,6 +1778,23 @@ module csr_regfile
       endcase
     end
 
+    //SSLP
+    if (elp_i==riscv::LP_EXPECTED) begin
+        lp_exp_d =riscv::LP_EXPECTED;
+    end else lp_exp_d = lp_exp_q;
+    
+    if (complete_cfi == 2'b11 && (mstatus_q.mpelp || mstatus_q.spelp )) begin
+        mstatus_d.mpelp = 1'b0;
+        mstatus_d.spelp = 1'b0;
+        lp_exp_d =riscv::NO_LP_EXPECTED;
+    end else if(complete_cfi==2'b00 && ( mstatus_q.mpelp || mstatus_q.spelp) begin
+        //mstatus_d.mpelp = 1'b1;
+        //mstatus_d.spelp = 1'b1;
+        lp_exp_d =riscv::LP_EXPECTED;
+    end else lp_exp_d = lp_exp_q;
+
+    //_SSLP
+
     mstatus_d.sxl = riscv::XLEN_64;
     mstatus_d.uxl = riscv::XLEN_64;
     if (!CVA6Cfg.RVU) begin
@@ -1846,6 +1925,12 @@ module csr_regfile
                              riscv::BREAKPOINT,
                              riscv::ENV_CALL_UMODE
                              } || ex_i.cause[CVA6Cfg.XLEN-1])) ? '0 : ex_i.tval;
+           //SSLP
+           if(lp_exp_q== riscv::LP_EXPECTED) begin
+                mstatus_d.spelp = 1'b1; //SPELP, save previous elp
+                lp_exp_d = riscv::NO_LP_EXPECTED;
+            end //else mstatus_d.spelp = 1'b0;
+            //_SSLP
         end else begin
           // update sstatus
           mstatus_d.sie = 1'b0;
@@ -1894,6 +1979,15 @@ module csr_regfile
         mcause_d = ex_i.cause;
         // set epc
         mepc_d = {{CVA6Cfg.XLEN - CVA6Cfg.VLEN{pc_i[CVA6Cfg.VLEN-1]}}, pc_i};
+
+
+        //SSLP
+        if(lp_exp_q== riscv::LP_EXPECTED) begin
+            mstatus_d.mpelp = 1'b1; //MPELP, save previous elp
+            lp_exp_d = riscv::NO_LP_EXPECTED;
+        end //else mstatus_d.mpelp = 1'b0;
+
+        //_SSLP
         // set mtval or stval
         if (CVA6Cfg.TvalEn) begin
           mtval_d        = (ariane_pkg::ZERO_TVAL
@@ -1907,7 +2001,7 @@ module csr_regfile
         end else begin
           mtval_d = '0;
         end
-
+        
         if (CVA6Cfg.RVH) begin
           // save previous virtualization mode
           mstatus_d.mpv = v_q;
@@ -2100,6 +2194,14 @@ module csr_regfile
       end
       // set mpie to 1
       mstatus_d.mpie = 1'b1;
+      //SSLP
+      if (xLPAD) begin
+          if (mastatus_q.mpelp) begin
+              lp_exp_d = riscv::LP_EXPECTED;
+          end else
+              lp_exp_d = riscv::NO_LP_EXPECTED;
+      end
+      //_SSLP
       if (CVA6Cfg.RVH) begin
         // set virtualization mode
         v_d           = mstatus_q.mpv;
@@ -2120,6 +2222,14 @@ module csr_regfile
       mstatus_d.spp  = 1'b0;
       // set spie to 1
       mstatus_d.spie = 1'b1;
+
+      //SSLP
+      if (xLPAD) begin
+          if (mstatus_q.spelp) begin
+              lp_exp_d = riscv::LP_EXPECTED;
+          end else lp_exp_d = riscv::NO_LP_EXPECTED;
+      end
+      //_SSLP
       if (CVA6Cfg.RVH) begin
         // set virtualization mode
         v_d            = hstatus_q.spv;
@@ -2157,6 +2267,21 @@ module csr_regfile
         end
         // actually return from debug mode
         debug_mode_d = 1'b0;
+
+        //SSLP
+        if(xLPAD && (dcsr_q.prv == riscv::PRIV_LVL_S || dcsr_q.prv == riscv::PRIV_LVL_U)) begin
+            if(mstatus_q.spelp)//restore elp state
+                mstatus_d.spelp = 1'b1;
+            else  mstatus_d.spelp = 1'b0;
+        end 
+        else if ( xLPAD && dcsr_q.prv == riscv::PRIV_LVL_M ) begin
+            if(dcsr_q.pelp) begin//restore elp state
+                //mstatus_d.mpelp = 1'b1;
+                lp_exp_d = riscv::LP_EXPECTED;
+            end else  lp_exp_d = riscv::NO_LP_EXPECTED;
+        end
+        //_SSLP
+
       end
     end
   end
@@ -2292,6 +2417,20 @@ module csr_regfile
       // -----------------
       // Privilege Check
       // -----------------
+        
+
+      //SSLP
+      if ( priv_lvl_o == riscv::PRIV_LVL_M)
+        xLPAD = mseccfg_q.mlpe;
+      else if (priv_lvl_o == riscv::PRIV_LVL_S )
+        xLPAD = menvcfg_q.lpe;
+      else if (priv_lvl_o == riscv::PRIV_LVL_U )
+        xLPAD = senvcfg_q.lpe || menvcfg_q.lpe;
+      else
+        xLPAD = 0;
+
+      //_SSLP
+
       privilege_violation = 1'b0;
       // if we are reading or writing, check for the correct privilege level this has
       // precedence over interrupts
@@ -2587,6 +2726,17 @@ module csr_regfile
       en_ld_st_translation_q <= 1'b0;
       // wait for interrupt
       wfi_q                  <= 1'b0;
+
+      //SSLP
+      menvcfg_q              <= '0;
+      henvcfg_q              <= '0;
+      senvcfg_q              <= '0;
+      menvcfgh_q             <= '0;
+      henvcfgh_q             <= '0;
+      mseccfg_q              <= '0;
+      lp_exp_q               <= riscv::NO_LP_EXPECTED;
+
+      //_SSLP
       // pmp
       for (int i = 0; i < 64; i++) begin
         if (i < CVA6Cfg.NrPMPEntries) begin
@@ -2667,6 +2817,17 @@ module csr_regfile
       en_ld_st_translation_q <= en_ld_st_translation_d;
       // wait for interrupt
       wfi_q                  <= wfi_d;
+
+      //SSLP
+      lp_exp_q               <= lp_exp_d;
+      menvcfg_q              <= menvcfg_d;
+      henvcfg_q              <= henvcfg_d;
+      senvcfg_q              <= senvcfg_d;
+      menvcfgh_q             <= menvcfgh_d;
+      henvcfgh_q             <= henvcfgh_d;
+      mseccfg_q              <= mseccfg_q;
+      
+      //_SSLP
       // pmp
       pmpcfg_q               <= pmpcfg_next;
       pmpaddr_q              <= pmpaddr_next;

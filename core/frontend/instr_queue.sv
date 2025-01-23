@@ -85,7 +85,14 @@ module instr_queue
     // Handshake’s valid with ID_STAGE - ID_STAGE
     output logic [CVA6Cfg.NrIssuePorts-1:0] fetch_entry_valid_o,
     // Handshake’s ready with ID_STAGE - ID_STAGE
-    input logic [CVA6Cfg.NrIssuePorts-1:0] fetch_entry_ready_i
+    input logic [CVA6Cfg.NrIssuePorts-1:0] fetch_entry_ready_i,
+    //SSLP
+    input logic tracked_branch,
+    output riscv::elp elp_o,
+    input logic move,
+    input logic xLPAD_i,
+    input logic ex_valid_i
+    //_SSLP
 );
 
   // Calculate next index based on whether superscalar is enabled or not.
@@ -298,6 +305,21 @@ module instr_queue
   // ----------------------
   // as long as there is at least one queue which can take the value we have a valid instruction
   assign fetch_entry_valid_o[0] = ~(&instr_queue_empty);
+
+    //SSLP
+    enum logic [2:0]{
+        NO_LP_EXPECTED_STATE,         //0
+        WAIT_STATE,             //1 wait for the branch to be resolved
+        LP_EXPECTED_STATE_LPAD,          //2
+        LP_EXPECTED_STATE_MATCH, //3
+        ILLEGAL_STATE     //4
+    }curr_state,next_state;
+    logic is_lp_expected_jalr, is_lp_expected_cmpr_jump;
+    logic cfi_on_q,cfi_on_d;
+    //_SSLP
+  
+
+
   if (CVA6Cfg.SuperscalarEn) begin : gen_fetch_entry_valid_1
     // TODO Maybe this additional fetch_entry_is_cf check is useless as issue-stage already performs it?
     assign fetch_entry_valid_o[NID] = ~|(instr_queue_empty & idx_ds[1]) & ~(&fetch_entry_is_cf);
@@ -325,7 +347,9 @@ module instr_queue
         fetch_entry_o[i].address = pc_j[i];
         fetch_entry_o[i].ex.valid = 1'b0;
         fetch_entry_o[i].ex.cause = '0;
-
+        //SSLP
+        elp_o = riscv::NO_LP_EXPECTED;
+        //_SSLP
         fetch_entry_o[i].ex.tval = '0;
         fetch_entry_o[i].ex.tval2 = '0;
         fetch_entry_o[i].ex.gva = 1'b0;
@@ -345,6 +369,88 @@ module instr_queue
           end else begin
             fetch_entry_o[0].ex.cause = riscv::INSTR_PAGE_FAULT;
           end
+          //SSLP
+          if (xLPAD_i) begin
+              case(curr_state)
+                  NO_LP_EXPECTED_STATE: begin
+                      elp_o = riscv::NO_LP_EXPECTED;
+                      if (instr_data_out[i].instr[1:0] == riscv::OpcodeC1 && 
+                        instr_data_out[i].instr[15:13] == riscv::OpcodeC1LuiAddi16sp && 
+                        instr_data_out[i].instr[11:7] == 5'b00111) begin
+                            cfi_on_d = 1'b1;
+                      end
+                      if (cfi_on_q) begin
+                          is_lp_expected_jalr = ((instr_data_out[i].instr[6:0] == riscv::OpcodeJalr) && 
+                                                (instr_data_out[i].instr[19:15] != 5'b00001) && 
+                                                (instr_data_out[i].instr[19:15] != 5'b00101) && 
+                                                (instr_data_out[i].instr[19:15] != 5'b00111) ) ? 1 : 0;
+
+                          is_lp_expected_cmpr_jump = (((instr_data_out[i].instr[1:0]==riscv::OpcodeC2 && 
+                                                        instr_data_out[i].instr[15:13] == riscv::OpcodeC2JalrMvAdd &&
+                                                        instr_data_out[i].instr[6:2] == 5'b0 &&  
+                                                        instr_data_out[i].instr[12]== 1'b0) ||
+                                                        (instr_data_out[i].instr[1:0]==riscv::OpcodeC2 && 
+                                                        instr_data_out[i].instr[15:13] == riscv::OpcodeC2JalrMvAdd &&
+                                                        instr_data_out[i].instr[12] != 1'b0 && 
+                                                        instr_data_out[i].instr[11:7] != 5'b0 && 
+                                                        instr_data_out[i].instr[6:2] == 5'b0)) &&
+                                                        (instr_data_out[i].instr[11:7] != 5'b00001) && 
+                                                        (instr_data_out[i].instr[11:7] != 5'b00101) && 
+                                                        (instr_data_out[i].instr[11:7] != 5'b00111) ) ? 1 : 0;
+                      end
+                      if (is_lp_expected_jalr || is_lp_expected_cmpr_jump) next_state = WAIT_STATE;
+                      else next_state = NO_LP_EXPECTED_STATE;
+                    end
+                    
+                    WAIT_STATE: begin
+                        elp_o = riscv::LP_EXPECTED;
+                        if (instr_data_out[i].ex != ariane_pkg::FE_NONE || ex_valid_i) begin
+                            next_state = NO_LP_EXPECTED_STATE; //interrupt
+                            elp_o = riscv::NO_LP_EXPECTED;
+                            cfi_on_d = 1'b0;
+                        end else begin
+                            if (move) begin // brach is resolved
+                            next_state = LP_EXPECTED_STATE_LPAD;
+                            end else next_state = WAIT_STATE;
+                        end
+                    end
+
+                    LP_EXPECTED_STATE_LPAD: begin
+                        elp_o = riscv::LP_EXPECTED;
+                        is_lp_expected_jalr = 1'b0;
+                        is_lp_expected_cmpr_jump = 1'b0;
+                        if (instr_data_out[i].ex != ariane_pkg::FE_NONE || ex_valid_i) begin
+                            next_state = NO_LP_EXPECTED_STATE; //interrupt
+                            elp_o = riscv::NO_LP_EXPECTED;
+                            cfi_on_d = 1'b0;
+                        end
+                        if(fetch_entry_valid_o) begin
+                            if (instr_data_out[i].instr[6:0] == riscv::OpcodeAuipc && 
+                                instr_data_out[i].instr[11:7] == 5'b0000) begin
+                                next_state = LP_EXPECTED_STATE_MATCH;
+                                cfi_on_d=1'b0;
+                            end 
+                            else next_state = ILLEGAL_STATE;
+                        end
+                    end
+
+                    LP_EXPECTED_STATE_MATCH: begin
+                        elp_o = riscv::LP_EXPECTED;
+                        if(complete_cfi == 2'b11) next_state = NO_LP_EXPECTED_STATE;
+                        else if(complete_cfi == 2'b00) next_state = ILLEGAL_STATE;
+                        else next_state = LP_EXPECTED_STATE_MATCH;
+                    end
+                    
+                    ILLEGAL_STATE: begin
+                        elp_o = riscv::LP_EXPECTED;
+                    end
+                endcase
+            end
+
+          //_SSLP
+
+
+
           fetch_entry_o[0].instruction = instr_data_out[i].instr;
           fetch_entry_o[0].ex.valid = instr_data_out[i].ex != ariane_pkg::FE_NONE;
           if (CVA6Cfg.TvalEn)
@@ -518,9 +624,17 @@ module instr_queue
         idx_is_q        <= '0;
         pc_q            <= '0;
         reset_address_q <= 1'b1;
+        //SSLP
+        cfi_on_q        <= 1'b0;
+        curr_state      <= NO_LP_EXPECTED;
+        //_SSLP
       end else begin
         pc_q            <= pc_d;
         reset_address_q <= reset_address_d;
+        //SSLP
+        cfi_on_q        <= cfi_on_d;
+        curr_state      <= next_state;
+        //_SSLP
         if (flush_i) begin
           // one-hot encoded
           idx_ds_q        <= 'b1;
