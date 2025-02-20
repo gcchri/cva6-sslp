@@ -119,6 +119,9 @@ module alu
         NE:       alu_branch_res_o = ~adder_z_flag;
         LTS, LTU: alu_branch_res_o = less;
         GES, GEU: alu_branch_res_o = ~less;
+        //SSLP
+        LPAD:     alu_branch_res_o = ~|(fu_data_i.operand_a ^ fu_data_i.operand_b); // if 1 match else mismatch
+        //_SSLP
         default:  alu_branch_res_o = 1'b1;
       endcase
     end

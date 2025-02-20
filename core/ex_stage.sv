@@ -228,7 +228,12 @@ module ex_stage
     // Information dedicated to RVFI - RVFI
     output lsu_ctrl_t rvfi_lsu_ctrl_o,
     // Information dedicated to RVFI - RVFI
-    output [CVA6Cfg.PLEN-1:0] rvfi_mem_paddr_o
+    output [CVA6Cfg.PLEN-1:0] rvfi_mem_paddr_o,
+    //SSLP
+    output logic [1:0]                             complete_cfi,
+    input logic                                    xLPAD_i,
+    input riscv::elp                               elp_i
+    //_SSLP
 );
 
   // -------------------------
@@ -327,7 +332,12 @@ module ex_stage
       .branch_predict_i,
       .resolved_branch_o,
       .resolve_branch_o,
-      .branch_exception_o(flu_exception_o)
+      .branch_exception_o(flu_exception_o),
+      //SSLP
+      .complete_cfi (complete_cfi),
+      .xLPAD_i (xLPAD_i),
+      .elp_i (elp_i)
+      //_SSLP
   );
 
   // 3. CSR (sequential)
