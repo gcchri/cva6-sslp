@@ -1429,7 +1429,7 @@ module decoder
           if (xLPAD_i && instr.utype.rd == 5'b0) begin
               instruction_o.op = ariane_pkg::LPAD;
               instruction_o.rs1 = 5'b00111;
-              instruction_o.use_pc = 1'b0
+              instruction_o.use_pc = 1'b0;
           end else begin
             instruction_o.use_pc = 1'b1;
           end

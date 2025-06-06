@@ -136,17 +136,18 @@ module branch_unit #(
     end
     //SSLP
     if (xLPAD_i) begin
-      if (branch_valid_i && jump_taken && fu_data_i.operator == ariane_pkg::LPAD && elp_i == riscv::LP_EXPECTED) begin
+      if (branch_valid_i && jump_taken && fu_data_i.operation == ariane_pkg::LPAD && elp_i == riscv::LP_EXPECTED) 
+      begin
         if (branch_comp_res_i == 1'b0) begin
             branch_exception_o.valid = 1'b1;
             branch_exception_o.tval = 'h0002;
             complete_cfi = 2'b00;  //mismach
-        end else
+        end else begin
             complete_cfi = 2'b11;
         end
-       end else
+      end else begin
         complete_cfi = 2'b10;
-       end
+      end
     end 
     //_SSLP
   end

@@ -87,9 +87,9 @@ module instr_queue
     // Handshake’s ready with ID_STAGE - ID_STAGE
     input logic [CVA6Cfg.NrIssuePorts-1:0] fetch_entry_ready_i,
     //SSLP
-    input logic tracked_branch,
-    output riscv::elp elp_o,
     input logic move,
+    output riscv::elp elp_o,
+    input logic[1:0] complete_cfi,
     input logic xLPAD_i,
     input logic ex_valid_i
     //_SSLP
@@ -626,7 +626,7 @@ module instr_queue
         reset_address_q <= 1'b1;
         //SSLP
         cfi_on_q        <= 1'b0;
-        curr_state      <= NO_LP_EXPECTED;
+        curr_state      <= NO_LP_EXPECTED_STATE;
         //_SSLP
       end else begin
         pc_q            <= pc_d;

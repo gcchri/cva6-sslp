@@ -171,7 +171,7 @@ module csr_regfile
     //SSLP
     input riscv::elp elp_i,
     input logic [1:0] complete_cfi,
-    output riscv_elp elp_o,
+    output riscv::elp elp_o,
     output logic xLPAD_o
     //_SSLP
 );
@@ -304,12 +304,12 @@ module csr_regfile
   logic xLPAD;
   riscv::elp lp_exp_d, lp_exp_q;
   assign xLPAD_o = xLPAD;
-  riscv::env_cfg menvcfg_d, menvcfg_q;
-  riscv::env_cfg menvcfgh_d, menvcfgh_q;
-  riscv::env_cfg henvcfg_d, henvcfg_q;
-  riscv::env_cfg henvcfgh_d, henvcfgh_q;
-  riscv::env_cfg senvcfg_d, senvcfg_q;
-  riscv::msec_cfg mseccfg_d, mseccfg_q;
+  riscv::envcfg_rv_t menvcfg_d, menvcfg_q;
+  riscv::envcfg_rv_t menvcfgh_d, menvcfgh_q;
+  riscv::envcfg_rv_t henvcfg_d, henvcfg_q;
+  riscv::envcfg_rv_t henvcfgh_d, henvcfgh_q;
+  riscv::envcfg_rv_t senvcfg_d, senvcfg_q;
+  riscv::mseccfg_rv_t mseccfg_d, mseccfg_q;
   // ----------------
   // Assignments
   // ----------------
@@ -1425,7 +1425,9 @@ module csr_regfile
               (!CVA6Cfg.RVU & mstatus_d.mpp == riscv::PRIV_LVL_U)) begin
             mstatus_d.mpp = mstatus_q.mpp;
           end
-          mstatus_d.wpri3 = 9'b0;
+          //SSLP
+          mstatus_d.wpri3 = 8'b0; //wpri3 is one bit less due to spelp
+          //_SSLP
           mstatus_d.wpri1 = 1'b0;
           mstatus_d.wpri2 = 1'b0;
           mstatus_d.wpri0 = 1'b0;
@@ -1779,19 +1781,25 @@ module csr_regfile
     end
 
     //SSLP
-    if (elp_i==riscv::LP_EXPECTED) begin
+    if (elp_i == riscv::LP_EXPECTED) begin
         lp_exp_d =riscv::LP_EXPECTED;
-    end else lp_exp_d = lp_exp_q;
+    end 
+    else begin 
+        lp_exp_d = lp_exp_q; 
+    end
     
     if (complete_cfi == 2'b11 && (mstatus_q.mpelp || mstatus_q.spelp )) begin
         mstatus_d.mpelp = 1'b0;
         mstatus_d.spelp = 1'b0;
-        lp_exp_d =riscv::NO_LP_EXPECTED;
-    end else if(complete_cfi==2'b00 && ( mstatus_q.mpelp || mstatus_q.spelp) begin
+        lp_exp_d = riscv::NO_LP_EXPECTED;
+    end else if (complete_cfi==2'b00 && ( mstatus_q.mpelp || mstatus_q.spelp)) begin
         //mstatus_d.mpelp = 1'b1;
         //mstatus_d.spelp = 1'b1;
-        lp_exp_d =riscv::LP_EXPECTED;
-    end else lp_exp_d = lp_exp_q;
+        lp_exp_d = riscv::LP_EXPECTED;
+    end 
+    else begin 
+        lp_exp_d = lp_exp_q;
+    end
 
     //_SSLP
 
@@ -2196,7 +2204,7 @@ module csr_regfile
       mstatus_d.mpie = 1'b1;
       //SSLP
       if (xLPAD) begin
-          if (mastatus_q.mpelp) begin
+          if (mstatus_q.mpelp) begin
               lp_exp_d = riscv::LP_EXPECTED;
           end else
               lp_exp_d = riscv::NO_LP_EXPECTED;

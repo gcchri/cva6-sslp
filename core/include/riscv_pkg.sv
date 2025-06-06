@@ -49,11 +49,23 @@ package riscv;
     Dirty   = 2'b11
   } xs_t;
 
+  //SSLP
+  typedef enum logic{
+    NO_LP_EXPECTED = 1'b0,
+    LP_EXPECTED = 1'b1
+  }elp;
+  //_SSLP
+
+
   typedef struct packed {
     logic sd;  // signal dirty state - read-only
-    logic [62:34] wpri6;  // writes preserved reads ignored
+    logic [62:34] wpri7;  // writes preserved reads ignored
     xlen_e uxl;  // variable user mode xlen - hardwired to zero
-    logic [11:0] wpri5;  // writes preserved reads ignored
+    //SSLP
+    logic [31:24] wpri6;
+    logic spelp;
+    logic [22:20] wpri5;  // writes preserved reads ignored
+    //_SSLP
     logic mxr;  // make executable readable
     logic sum;  // permit supervisor user memory access
     logic wpri4;  // writes preserved reads ignored
@@ -64,7 +76,7 @@ package riscv;
     logic spp;  // holds the previous privilege mode up to supervisor
     logic wpri2;  // writes preserved reads ignored
     logic mpie;  // machine interrupts enable bit active prior to trap
-    logic         ube;    // UBE controls whether explicit load and store memory accesses made from U-mode are little-endian (UBE=0) or big-endian (UBE=1)
+    logic ube;    // UBE controls whether explicit load and store memory accesses made from U-mode are little-endian (UBE=0) or big-endian (UBE=1)
     logic spie;  // supervisor interrupts enable bit active prior to trap
     logic [2:0] wpri1;  // writes preserved reads ignored
     logic sie;  // supervisor interrupts enable
@@ -91,14 +103,21 @@ package riscv;
 
   typedef struct packed {
     logic sd;  // signal dirty state - read-only
-    logic [62:40] wpri4;  // writes preserved reads ignored
+    //SSLP
+    logic [62:42] wpri5;  // writes preserved reads ignored
+    logic mpelp;          //machine previous expected anding pad (bit 41)
+    logic wpri4;
+    //_SSLP
     logic mpv;  // machine previous virtualization mode
     logic gva;  // variable set when trap writes to stval
     logic mbe;  // endianness memory accesses made from M-mode
     logic sbe;  // endianness memory accesses made from S-mode
     xlen_e sxl;  // variable supervisor mode xlen - hardwired to zero
     xlen_e uxl;  // variable user mode xlen - hardwired to zero
-    logic [8:0] wpri3;  // writes preserved reads ignored
+    // SSLP
+    logic [31:24] wpri3;  // writes preserved reads ignored
+    logic spelp;        //supervisor previous expected landing pad (bit 23)
+    //_SSLP
     logic tsr;  // trap sret
     logic tw;  // time wait
     logic tvm;  // trap virtual memory
@@ -123,14 +142,29 @@ package riscv;
   typedef struct packed {
     logic        stce;   // not implemented - requires Sctc extension
     logic        pbmte;  // not implemented - requires Svpbmt extension
-    logic [61:8] wpri1;  // writes preserved reads ignored
+    logic [61:8] wpri2;  // writes preserved reads ignored
     logic        cbze;   // not implemented - requires Zicboz extension
     logic        cbcfe;  // not implemented - requires Zicbom extension
     logic [1:0]  cbie;   // not implemented - requires Zicbom extension
-    logic [2:0]  wpri0;  // writes preserved reads ignored
+    logic        wpri1;
+    // SSLP
+    logic        lpe;    // landing pad enable
+    // _SSLP
+    logic        wpri0;  // writes preserved reads ignored
     logic        fiom;   // fence of I/O implies memory
   } envcfg_rv_t;
-
+//SSLP
+  typedef struct packed {
+    logic [63:11] wpri1;
+    logic         mlpe;
+    logic         sseed;
+    logic         useed;
+    logic [7:3]   wpri0;
+    logic         rlb;
+    logic         mmwp;
+    logic         mml;
+  } mseccfg_rv_t;
+//_SSLP
   // --------------------
   // Instruction Types
   // --------------------
@@ -208,7 +242,15 @@ package riscv;
     logic [11:7]  rd;
     logic [6:0]   opcode;
   } atype_t;
+//SSLP
+    //CFI instruction 
+    typedef struct packed{
+        logic [31:12] imm20;
+        logic [11:7]  rd; // 00000
+        logic [6:0]   opcode; //opcode auipc
+    } cfi_t;
 
+//_SSLP
   typedef union packed {
     logic [31:0] instr;
     rtype_t      rtype;
@@ -219,6 +261,7 @@ package riscv;
     stype_t      stype;
     utype_t      utype;
     atype_t      atype;
+    cfi_t        cfi;
   } instruction_t;
 
   // --------------------
@@ -341,6 +384,9 @@ package riscv;
   localparam logic [XLEN-1:0] INSTR_PAGE_FAULT = 12;  // Instruction page fault
   localparam logic [XLEN-1:0] LOAD_PAGE_FAULT = 13;  // Load page fault
   localparam logic [XLEN-1:0] STORE_PAGE_FAULT = 15;  // Store page fault
+  // SSLP
+  localparam logic [XLEN-1:0] SOFTWARE_CHECK        = 18;
+  //_SSLP
   localparam logic [XLEN-1:0] INSTR_GUEST_PAGE_FAULT = 20;  // Instruction guest-page fault
   localparam logic [XLEN-1:0] LOAD_GUEST_PAGE_FAULT = 21;  // Load guest-page fault
   localparam logic [XLEN-1:0] VIRTUAL_INSTRUCTION = 22;  // virtual instruction
@@ -711,7 +757,10 @@ package riscv;
     CSR_HPM_COUNTER_28H  = 12'hC9C,  // reserved
     CSR_HPM_COUNTER_29H  = 12'hC9D,  // reserved
     CSR_HPM_COUNTER_30H  = 12'hC9E,  // reserved
-    CSR_HPM_COUNTER_31H  = 12'hC9F   // reserved
+    CSR_HPM_COUNTER_31H  = 12'hC9F,   // reserved
+    //SSLP
+    CSR_MSECCFG        = 12'h747 //added by me
+    //_SSLP
   } csr_reg_t;
 
   localparam logic [63:0] SSTATUS_UIE = 'h00000001;
@@ -841,7 +890,10 @@ package riscv;
   // -----
   typedef struct packed {
     logic [31:28] xdebugver;
-    logic [27:18] zero2;
+    //SSLP
+    logic [27:19] zero2;
+    logic         pelp; //previous expected landing pad (bit 18)
+    //_SSLP
     logic         ebreakvs;
     logic         ebreakvu;
     logic         ebreakm;
